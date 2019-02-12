@@ -7,7 +7,7 @@
  * ----------------------------------------------------------------------
  *
  * Software by Whirl-i-Gig (http://www.whirl-i-gig.com)
- * Copyright 2008-2017 Whirl-i-Gig
+ * Copyright 2008-2019 Whirl-i-Gig
  *
  * For more information visit http://www.CollectiveAccess.org
  *
@@ -166,7 +166,7 @@ class ca_attributes extends BaseModel {
 		)
 	);
 	
-	static $s_attribute_cache_size = 1024;
+	static $s_attribute_cache_size = 8192;
 	static $s_get_attributes_cache = array();
 	static $s_ca_attributes_element_instance_cache = array();
 	
@@ -589,21 +589,23 @@ class ca_attributes extends BaseModel {
 	 * @return boolean Always return true
 	 */
 	static public function prefetchAttributes($po_db, $pn_table_num, $pa_row_ids, $pa_element_ids, $pa_options=null) {
-		if(!sizeof($pa_row_ids)) { return true; }
+		if(!($n = sizeof($pa_row_ids))) { return true; }
 		if(!is_array($pa_element_ids) || !sizeof($pa_element_ids)) { return true; }
 		
 		if (caGetOption('resetCache', $pa_options, false)) {
 			ca_attributes::$s_get_attributes_cache = array();
 		}
+		
+		if ($n > 200) { $pa_row_ids = array_slice($pa_row_ids, 0, 200); }		// only prefetch first items in very large result set
 	
 		// Make sure the element_id list looks like element_ids and does not have blanks
 		$va_element_ids = array();
 		foreach($pa_element_ids as $vn_i => $vn_element_id) {
-			if ($vn_element_id) { $va_element_ids[] = $vn_element_id; }
+			if ((int)$vn_element_id) { $va_element_ids[] = (int)$vn_element_id; }
 		}
 		if(!is_array($va_element_ids) || !sizeof($va_element_ids)) { return true; }
 
-		$qr_attrs = $po_db->query("
+		$qr_attrs = $po_db->query($z="
 			SELECT 
 				caa.attribute_id, caa.locale_id, caa.element_id element_set_id, caa.row_id,
 				caav.value_id, caav.item_id, caav.value_longtext1, caav.value_longtext2,
@@ -613,43 +615,32 @@ class ca_attributes extends BaseModel {
 			INNER JOIN ca_attribute_values AS caav ON caa.attribute_id = caav.attribute_id
 			WHERE
 				(caa.table_num = ?) AND (caa.row_id IN (?)) AND (caa.element_id IN (?))
-			ORDER BY
-				caa.attribute_id
 		", array((int)$pn_table_num, $pa_row_ids, $va_element_ids));
 		
-		if ($po_db->numErrors()) {
-			return false;
-		}
-		$va_attrs = array();
-		$vn_last_attribute_id = $vn_last_row_id = null;
+		if ($po_db->numErrors()) { return false; }
 		
-		$vn_val_count = 0;
-		$o_attr = $vn_last_element_id = null; 
+		$va_attrs = $acc = [];
 		while($qr_attrs->nextRow()) {
 			$va_raw_row = $qr_attrs->getRow();
-			
-			$va_raw_row['element_code'] = ca_metadata_elements::getElementCodeForID($va_raw_row['element_id']);
 			$va_raw_row['datatype'] = ca_metadata_elements::getElementDatatype($va_raw_row['element_id']);
 			
-			if ($vn_last_attribute_id != $va_raw_row['attribute_id']) {
-				if ($vn_last_attribute_id && $vn_last_row_id) {
-					$va_attrs[$vn_last_row_id][$vn_last_element_id][] = $o_attr;
-					$vn_val_count = 0;
-				}
-				$vn_last_attribute_id = $va_raw_row['attribute_id'];
-				$vn_last_row_id = $va_raw_row['row_id'];
-				$vn_last_element_id = $va_raw_row['element_set_id'];
-				
-				// when creating the attribute you want element_id = to the "set" id (ie. the element_id in the ca_attributes row) so we overwrite
-				// the element_id of the ca_attribute_values row before we pass the array to Attribute() below
-				$o_attr = new Attribute(array_merge($va_raw_row, array('element_id' => $va_raw_row['element_set_id'])));
+			if (!isset($acc[$va_raw_row['attribute_id']])) {
+				$acc[$va_raw_row['attribute_id']] = [
+					'row' => array_intersect_key($va_raw_row, array_flip(['attribute_id', 'locale_id', 'row_id'])),
+					'values' => []
+				];
+				$acc[$va_raw_row['attribute_id']]['row']['element_id'] = $va_raw_row['element_set_id'];
 			}
 			
-			$o_attr->addValueFromRow($va_raw_row);
-			$vn_val_count++;
+			$acc[$va_raw_row['attribute_id']]['values'][] = array_intersect_key($va_raw_row, array_flip(['datatype', 'attribute_id', 'element_id', 'value_id', 'item_id', 'value_longtext1', 'value_longtext2', 'value_decimal1', 'value_decimal2', 'value_integer1', 'value_blob']));
 		}
-		if ($vn_val_count > 0) {
-			$va_attrs[$vn_last_row_id][$vn_last_element_id][] = $o_attr;
+		
+		foreach($acc as $attribute_id => $info) {
+			$o_attr = new Attribute($info['row']);
+			foreach($info['values'] as $value) {
+				$o_attr->addValueFromRow($value);
+			}
+			$va_attrs[$info['row']['row_id']][$info['row']['element_id']][] = $o_attr;
 		}
 		
 		$va_row_id_with_no_attributes = array_flip($pa_row_ids);
@@ -692,7 +683,7 @@ class ca_attributes extends BaseModel {
 				array_splice(ca_attributes::$s_get_attributes_cache, 0, $vn_splice_length);
 			}
 		}
-		
+		Timer::p("prefetch");
 		return true;
 	}
 	# ------------------------------------------------------

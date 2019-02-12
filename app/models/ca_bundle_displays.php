@@ -7,7 +7,7 @@
  * ----------------------------------------------------------------------
  *
  * Software by Whirl-i-Gig (http://www.whirl-i-gig.com)
- * Copyright 2010-2018 Whirl-i-Gig
+ * Copyright 2010-2019 Whirl-i-Gig
  *
  * For more information visit http://www.CollectiveAccess.org
  *
@@ -247,6 +247,11 @@ class ca_bundle_displays extends BundlableLabelableBaseModelWithAttributes {
 	);	
 	
 	# ------------------------------------------------------
+	# Instance caching
+	# ------------------------------------------------------
+	protected $CACHE_INSTANCES = true;
+	
+	# ------------------------------------------------------
 	# Group-based access control
 	# ------------------------------------------------------
 	protected $USERS_RELATIONSHIP_TABLE = 'ca_bundle_displays_x_users';
@@ -479,6 +484,7 @@ class ca_bundle_displays extends BundlableLabelableBaseModelWithAttributes {
 	 *		display = display string for bundle
 	 */
 	public function getPlacements($pa_options=null) {
+		if (!is_array($pa_options)) { $pa_options = []; }
 		$pb_no_cache = (isset($pa_options['noCache'])) ? (bool)$pa_options['noCache'] : false;
 		$pb_settings_only = (isset($pa_options['settingsOnly'])) ? (bool)$pa_options['settingsOnly'] : false;
 		$pb_return_all_available_if_empty = (isset($pa_options['returnAllAvailableIfEmpty']) && !$pb_settings_only) ? (bool)$pa_options['returnAllAvailableIfEmpty'] : false;
@@ -494,7 +500,7 @@ class ca_bundle_displays extends BundlableLabelableBaseModelWithAttributes {
 		
 		if (!($vn_display_id = $this->getPrimaryKey())) {
 			if ($pb_return_all_available_if_empty && $ps_table) {
-				return ca_bundle_displays::$s_placement_list_cache[$vn_display_id] = $this->getAvailableBundles($ps_table);
+				return ca_bundle_displays::$s_placement_list_cache[$vn_display_id] = $this->getAvailableBundles($ps_table, ['omitSettingsForms' => true]);
 			}
 			return []; 
 		}
@@ -517,7 +523,7 @@ class ca_bundle_displays extends BundlableLabelableBaseModelWithAttributes {
 			ORDER BY rank
 		", (int)$vn_display_id);
 		
-		$va_available_bundles = ($pb_settings_only) ? [] : $this->getAvailableBundles(null, $pa_options);
+		$va_available_bundles = ($pb_settings_only) ? [] : $this->getAvailableBundles(null, array_merge(['omitSettingsForms' => true], $pa_options));
 		$va_placements = [];
 		
 		if ($qr_res->numRows() > 0) {
@@ -692,7 +698,7 @@ if (!$pb_omit_editing_info) {
 			}
 		} else {
 			if ($pb_return_all_available_if_empty) {
-				$va_placements = $this->getAvailableBundles($this->get('table_num'));
+				$va_placements = $this->getAvailableBundles($this->get('table_num'), ['omitSettingsForms' => true]);
 			}
 		}
 		return ca_bundle_displays::$s_placement_list_cache[$vs_cache_key] = $va_placements;
@@ -979,6 +985,7 @@ if (!$pb_omit_editing_info) {
 	 *		no_cache = if set caching of underlying data required to generate list is disabled. This is required in certain situations such as during installation. Only set this if you suspect stale data is being used to generate the list. Eg. if you've been changing metadata attributes in the same request in which you call this method. Default is false.
 	 *		no_tooltips = if set no tooltips for available bundles will be emitted. Default is false - tooltips will be emitted.
 	 *		format = specifies label format for bundles. Valid values are "simple" (just the name of the element) or "full" (name of element, name of type of item element pertains to and alternate label, if defined). Default is "full"
+	 *		omitSettingsForms = 
 	 * @return array And array of bundles keyed on display label. Each value is an array with these keys:
 	 *		bundle = The bundle name (eg. ca_objects.idno)
 	 *		display = Display label for each available bundle
@@ -990,6 +997,8 @@ if (!$pb_omit_editing_info) {
 		if (!$pm_table_name_or_num) { $pm_table_name_or_num = $this->get('table_num'); }
 		$pm_table_name_or_num = Datamodel::getTableNum($pm_table_name_or_num);
 		if (!$pm_table_name_or_num) { return null; }
+		
+		$pb_omit_settings_forms = caGetOption('omitSettingsForms', $pa_options, false);
 		
 		$vb_show_tooltips = (isset($pa_options['no_tooltips']) && (bool)$pa_options['no_tooltips']) ? false : true;
 		$vs_format = (isset($pa_options['format']) && in_array($pa_options['format'], array('simple', 'full'))) ? $pa_options['format'] : 'full';
@@ -1027,7 +1036,7 @@ if (!$pb_omit_editing_info) {
 			'bundle' => $vs_bundle,
 			'display' => ($vs_format == 'simple') ? $vs_label : $vs_display,
 			'description' => _t('Generic template bundle for %1', caUcFirstUTF8Safe($t_instance->getProperty('NAME_PLURAL'))),
-			'settingsForm' => $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
+			'settingsForm' => $pb_omit_settings_forms ? null : $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
 			'settings' => $va_additional_settings
 		];
 		
@@ -1075,7 +1084,7 @@ if (!$pb_omit_editing_info) {
 				'bundle' => $vs_bundle,
 				'display' => ($vs_format == 'simple') ? $vs_label : $vs_display,
 				'description' => $vs_description = $t_instance->getDisplayDescription($vs_bundle),
-				'settingsForm' => $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
+				'settingsForm' =>  $pb_omit_settings_forms ? null : $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
 				'settings' => $va_additional_settings
 			);
 			
@@ -1209,7 +1218,7 @@ if (!$pb_omit_editing_info) {
 				'bundle' => $vs_bundle,
 				'display' => ($vs_format == 'simple') ? $vs_label : $vs_display,
 				'description' => $vs_description = $t_instance->getDisplayDescription($vs_bundle),
-				'settingsForm' => $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
+				'settingsForm' =>  $pb_omit_settings_forms ? null : $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
 				'settings' => array_merge($va_additional_settings, $va_even_more_settings)
 			);
 			
@@ -1263,7 +1272,7 @@ if (!$pb_omit_editing_info) {
 				'bundle' => $vs_bundle,
 				'display' => ($vs_format == 'simple') ? $vs_label : $vs_display,
 				'description' => $vs_description = $t_instance->getDisplayDescription($vs_bundle),
-				'settingsForm' => $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
+				'settingsForm' =>  $pb_omit_settings_forms ? null : $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
 				'settings' => $va_additional_settings
 			);
 			
@@ -1287,7 +1296,7 @@ if (!$pb_omit_editing_info) {
 				'bundle' => $vs_bundle,
 				'display' => ($vs_format == 'simple') ? $vs_label : $vs_display,
 				'description' => $vs_description = $t_instance->getDisplayDescription($vs_bundle),
-				'settingsForm' => $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
+				'settingsForm' =>  $pb_omit_settings_forms ? null : $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
 				'settings' => $va_additional_settings
 			);
 				
@@ -1324,7 +1333,7 @@ if (!$pb_omit_editing_info) {
 				'bundle' => $vs_bundle,
 				'display' => ($vs_format == 'simple') ? $vs_label : $vs_display,
 				'description' => $vs_description,
-				'settingsForm' => $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
+				'settingsForm' =>  $pb_omit_settings_forms ? null : $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
 				'settings' => $va_additional_settings
 			);
 			
@@ -1358,7 +1367,7 @@ if (!$pb_omit_editing_info) {
 				'bundle' => $vs_bundle,
 				'display' => ($vs_format == 'simple') ? $vs_label : $vs_display,
 				'description' => $vs_description,
-				'settingsForm' => $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
+				'settingsForm' =>  $pb_omit_settings_forms ? null : $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
 				'settings' => $va_additional_settings
 			);
 			
@@ -1403,7 +1412,7 @@ if (!$pb_omit_editing_info) {
 						'bundle' => $vs_bundle,
 						'display' => ($vs_format == 'simple') ? $vs_label : $vs_display,
 						'description' => $vs_description = $t_instance->getDisplayDescription($vs_bundle),
-						'settingsForm' => $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
+						'settingsForm' =>  $pb_omit_settings_forms ? null : $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
 						'settings' => $va_additional_settings
 					);
 					
@@ -1426,7 +1435,7 @@ if (!$pb_omit_editing_info) {
 						'bundle' => $vs_bundle,
 						'display' => ($vs_format == 'simple') ? $vs_label : $vs_display,
 						'description' => $vs_description = $t_rep->getDisplayDescription($vs_bundle),
-						'settingsForm' => $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
+						'settingsForm' =>  $pb_omit_settings_forms ? null : $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
 						'settings' => []
 					);
 				}
@@ -1610,7 +1619,7 @@ if (!$pb_omit_editing_info) {
 				'bundle' => $vs_bundle,
 				'display' => ($vs_format == 'simple') ? $vs_label : $vs_display,
 				'description' => $vs_description = $t_rel_instance->getDisplayDescription($vs_bundle),
-				'settingsForm' => $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
+				'settingsForm' =>  $pb_omit_settings_forms ? null : $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
 				'settings' => $va_additional_settings
 			);
 			
@@ -1647,7 +1656,7 @@ if (!$pb_omit_editing_info) {
 			'bundle' => $vs_bundle,
 			'display' => ($vs_format == 'simple') ? $vs_label : $vs_display,
 			'description' => $vs_description = _t('Date and time item was created'),
-			'settingsForm' => $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
+			'settingsForm' =>  $pb_omit_settings_forms ? null : $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
 			'settings' => $va_additional_settings
 		);
 		
@@ -1664,7 +1673,7 @@ if (!$pb_omit_editing_info) {
 			'bundle' => $vs_bundle,
 			'display' => $vs_display,
 			'description' => $vs_description = _t('Date and time item was last modified'),
-			'settingsForm' => $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
+			'settingsForm' =>  $pb_omit_settings_forms ? null : $t_placement->getHTMLSettingForm(array('id' => $vs_bundle.'_0')),
 			'settings' => $va_additional_settings
 		);
 		

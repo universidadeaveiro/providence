@@ -357,7 +357,7 @@ class TimeExpressionParser {
 								if ($va_peek['type'] == TEP_TOKEN_INTEGER) {
 									$vn_start_year = $va_peek['value'];
 								} else {
-									$va_today = $this->gmgetdate();
+									$va_today = self::gmgetdate();
 									$vn_start_year = $va_today['year'];
 								}
 								$this->skipToken();
@@ -1121,7 +1121,7 @@ class TimeExpressionParser {
 								break;
 							# ----------------------
 							case TEP_TOKEN_NOW:
-								$va_now = $this->gmgetdate();
+								$va_now = self::gmgetdate();
 								$va_date = array(
 									'month' => $va_now['mon'], 'day' => $va_now['mday'], 'year' => $va_now['year'],
 									'hours' => $va_now['hours'], 'minutes' => $va_now['minutes'], 'seconds' => $va_now['seconds'],
@@ -1133,7 +1133,7 @@ class TimeExpressionParser {
 								break;
 							# ----------------------
 							case TEP_TOKEN_YESTERDAY:
-								$va_yesterday = $this->gmgetdate(time() - (24 * 60 * 60));
+								$va_yesterday = self::gmgetdate(time() - (24 * 60 * 60));
 								$va_date = array(
 									'month' => $va_yesterday['mon'], 'day' => $va_yesterday['mday'], 'year' => $va_yesterday['year'],
 									'hours' => 0, 'minutes' => 0, 'seconds' => 0,
@@ -1145,7 +1145,7 @@ class TimeExpressionParser {
 								break;
 							# ----------------------
 							case TEP_TOKEN_TODAY:
-								$va_today = $this->gmgetdate();
+								$va_today = self::gmgetdate();
 								$va_date = array(
 									'month' => $va_today['mon'], 'day' => $va_today['mday'], 'year' => $va_today['year'],
 									'hours' => 0, 'minutes' => 0, 'seconds' => 0,
@@ -1157,7 +1157,7 @@ class TimeExpressionParser {
 								break;
 							# ----------------------
 							case TEP_TOKEN_TOMORROW:
-								$va_tomorrow = $this->gmgetdate(time() + (24 * 60 * 60));
+								$va_tomorrow = self::gmgetdate(time() + (24 * 60 * 60));
 								$va_date = array(
 									'month' => $va_tomorrow['mon'], 'day' => $va_tomorrow['mday'], 'year' => $va_tomorrow['year'],
 									'hours' => 0, 'minutes' => 0, 'seconds' => 0,
@@ -2028,7 +2028,7 @@ class TimeExpressionParser {
 				&&
 				(!$pa_dates['start']['era'] && ($pa_dates['start']['year'] > 0) && ($pa_dates['start']['year'] <= 99))
 			) {
-				$va_tmp = $this->gmgetdate();
+				$va_tmp = self::gmgetdate();
 				$vn_current_year = intval(substr($va_tmp['year'], 2, 2));		// get last two digits of current year
 				$vn_current_century = intval(substr($va_tmp['year'], 0, 2)) * 100;
 
@@ -2044,7 +2044,7 @@ class TimeExpressionParser {
 				&&
 				(!isset($pa_dates['end']['era']) && ($pa_dates['end']['year'] > 0) && ($pa_dates['end']['year'] <= 99))
 			) {
-				$va_tmp = $this->gmgetdate();
+				$va_tmp = self::gmgetdate();
 				$vn_current_year = intval(substr($va_tmp['year'], 2, 2));		// get last two digits of current year
 				$vn_current_century = intval(substr($va_tmp['year'], 0, 2)) * 100;
 
@@ -2064,7 +2064,7 @@ class TimeExpressionParser {
 				if (!is_null($pa_dates['end']['year'])) {
 					$pa_dates['end']['year'] = 0;
 				} else {
-					$va_current_date = $this->gmgetdate();
+					$va_current_date = self::gmgetdate();
 					$pa_dates['end']['year'] = $va_current_date['year'];
 					if (($pa_dates['end']['month'] === null) && ($pa_dates['start']['year'] != TEP_START_OF_UNIVERSE)) { 
 						$pa_dates['end']['month'] = $pa_dates['start']['month']; 
@@ -2395,8 +2395,8 @@ class TimeExpressionParser {
 			if (($va_unix_dates['start'] != null) && ($va_unix_dates['start'] != -1)) {
 				// convert unix timestamps for historic timestamp format for evaluation
 				$va_dates = array(
-					'start' 	=> $this->unixToHistoricTimestamp($va_unix_dates['start']),
-					'end' 		=> $this->unixToHistoricTimestamp($va_unix_dates['end'])
+					'start' 	=> self::unixToHistoricTimestamp($va_unix_dates['start']),
+					'end' 		=> self::unixToHistoricTimestamp($va_unix_dates['end'])
 				);
 			} 
 		}
@@ -3271,7 +3271,7 @@ class TimeExpressionParser {
 	# -------------------------------------------------------------------
 	public function daysInMonth($pn_month, $pn_year=null) {
 		if (!$pn_year) {
-			$va_tmp = $this->gmgetdate();
+			$va_tmp = self::gmgetdate();
 			$pn_year = $va_tmp['year'];
 		} else {
 			if (preg_match('!^[\?]+$!', $pn_year)) { $pn_year = 0; }
@@ -3344,12 +3344,12 @@ class TimeExpressionParser {
 		return $va_parts;
 	}
 	# -------------------------------------------------------------------
-	public function unixToHistoricTimestamp($pn_unix_timestamp) {
-		$va_date_info = $this->gmgetdate($pn_unix_timestamp);
+	public static function unixToHistoricTimestamp($pn_unix_timestamp) {
+		$va_date_info = self::gmgetdate($pn_unix_timestamp);
 		return $va_date_info['year'].".".sprintf('%02d',$va_date_info['mon']).sprintf('%02d',$va_date_info['mday']).sprintf('%02d',$va_date_info['hours']).sprintf('%02d',$va_date_info['minutes']).sprintf('%02d',$va_date_info['seconds']).'00'; 
 	}
 	# -------------------------------------------------------------------
-	public function historicToUnixTimestamp($pn_historic_timestamp) {
+	public static function historicToUnixTimestamp($pn_historic_timestamp) {
 	    $year = (int)$pn_historic_timestamp;
 	    $tmp = explode('.', $pn_historic_timestamp);
 	    $month = substr($tmp[1], 0, 2);
@@ -3606,7 +3606,7 @@ class TimeExpressionParser {
 	/**
 	 * Timezone-less version of getDate()
 	 */
-	public function gmgetdate($ts = null){ 
+	public static function gmgetdate($ts = null){ 
         $k = array('seconds','minutes','hours','mday', 
                 'wday','mon','year','yday','weekday','month',0);
         return(array_combine($k,explode(":",
@@ -3624,17 +3624,13 @@ class TimeExpressionParser {
 	 *				
 	 */
 	public static function now($pa_options=null) {
-		$ps_format = caGetOption('format', $pa_options, null, ['toLowerCase' => true]);
-		$o_tep = new TimeExpressionParser();
-		$o_tep->parse(__TEP_NOW__);
-		
-		switch($ps_format) {
+		switch(caGetOption('format', $pa_options, null, ['toLowerCase' => true])) {
 			case 'unix':
-				return array_shift($o_tep->getUnixTimestamps());
+				return time(); 
 				break;
 			case 'historic':
 			default:
-				return array_shift($o_tep->getHistoricTimestamps());
+				return self::unixToHistoricTimestamp(time());
 				break;
 		}
 		return null;

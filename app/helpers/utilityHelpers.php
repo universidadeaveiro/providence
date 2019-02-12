@@ -1624,8 +1624,7 @@ function caFileIsIncludable($ps_file) {
 	  * @return float Equivalent value as floating point historic timestamp value, or null if Unix timestamp was not valid.
 	  */
 	function caUnixTimestampToHistoricTimestamp($pn_timestamp) {
-		$o_tep = new TimeExpressionParser();
-		return $o_tep->unixToHistoricTimestamp($pn_timestamp);
+		return TimeExpressionParser::unixToHistoricTimestamp($pn_timestamp);
 	}
 	# ---------------------------------------
 	/**
@@ -1635,8 +1634,7 @@ function caFileIsIncludable($ps_file) {
 	  * @return float Equivalent value as Unix timestamp or null if historic timestamp was not valid or is before 1970.
 	  */
 	function caHistoricTimestampToUnixTimestamp($pn_timestamp) {
-		$o_tep = new TimeExpressionParser();
-		return $o_tep->historicToUnixTimestamp($pn_timestamp);
+		return TimeExpressionParser::historicToUnixTimestamp($pn_timestamp);
 	}
 	# ---------------------------------------
 	/**

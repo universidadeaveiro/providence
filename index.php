@@ -34,6 +34,7 @@
 		caDisplayException(new ApplicationException("No setup.php found"));
 		exit; 
 	}
+	gc_disable(true);
 	require('./setup.php');
 	require_once('./app/helpers/post-setup.php');
 
@@ -48,18 +49,25 @@
 		$g_monitor = new ApplicationMonitor();
 		if ($g_monitor->isEnabled()) { $o_db->setMonitor($g_monitor); }
 
+
+		$app = AppController::getInstance();
+
+		$g_request = $req = $app->getRequest();
+		$g_response = $resp = $app->getResponse();
 		//
 		// do a sanity check on application and server configuration before servicing a request
 		//
-		require_once(__CA_APP_DIR__.'/lib/ConfigurationCheck.php');
-		ConfigurationCheck::performQuick();
-		if(ConfigurationCheck::foundErrors()){
-			if (defined('__CA_ALLOW_AUTOMATIC_UPDATE_OF_DATABASE__') && __CA_ALLOW_AUTOMATIC_UPDATE_OF_DATABASE__ && $_REQUEST['updateSchema']) {
-				ConfigurationCheck::updateDatabaseSchema();
-			} else {
-				ConfigurationCheck::renderErrorsAsHTMLOutput();
+		if(!defined("__CA_DISABLE_PER_REQUEST_CONFIGURATION_CHECK__")) {
+			require_once(__CA_APP_DIR__.'/lib/ConfigurationCheck.php');
+			ConfigurationCheck::performQuick();
+			if(ConfigurationCheck::foundErrors()){
+				if (defined('__CA_ALLOW_AUTOMATIC_UPDATE_OF_DATABASE__') && __CA_ALLOW_AUTOMATIC_UPDATE_OF_DATABASE__ && $_REQUEST['updateSchema']) {
+					ConfigurationCheck::updateDatabaseSchema();
+				} else {
+					ConfigurationCheck::renderErrorsAsHTMLOutput();
+				}
+				exit();
 			}
-			exit();
 		}
 
 		if(isset($_REQUEST['processIndexingQueue']) && $_REQUEST['processIndexingQueue']) {
@@ -70,11 +78,6 @@
 
 		// run garbage collector
 		GarbageCollection::gc();
-
-		$app = AppController::getInstance();
-
-		$g_request = $req = $app->getRequest();
-		$g_response = $resp = $app->getResponse();
 
 		// Prevent caching
 		$resp->addHeader("Cache-Control", "no-cache, must-revalidate");

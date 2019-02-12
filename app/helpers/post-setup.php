@@ -360,7 +360,7 @@ if (!defined('__CA_ALLOW_AUTOMATIC_UPDATE_OF_DATABASE__')) {
 
 # __CA_DISABLE_PER_REQUEST_CONFIGURATION_CHECK__
 #
-# Set this to allow enable quick checks of server and application configuration 
+# Set this to disable quick checks of server and application configuration 
 # on _each_ request. Doing continuous checks can be useful for new installations or
 # while debugging, but is usually not necessary in production environments. These checks
 # can be disabled here for a modest performance improvement.

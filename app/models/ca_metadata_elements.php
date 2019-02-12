@@ -216,6 +216,12 @@ class ca_metadata_elements extends LabelableBaseModelWithAttributes implements I
 	);
 
 	# ------------------------------------------------------
+	# Instance caching
+	# ------------------------------------------------------
+	protected $CACHE_INSTANCES = true;
+	protected $CACHE_LABELS = true;
+	
+	# ------------------------------------------------------
 	# Labeling
 	# ------------------------------------------------------
 	protected $LABEL_TABLE_NAME = 'ca_metadata_element_labels';
@@ -1207,6 +1213,42 @@ class ca_metadata_elements extends LabelableBaseModelWithAttributes implements I
 	}
 	# ------------------------------------------------------
 	/**
+	 * Test if element exists
+	 *
+	 * @param mixed $pm_element_code_or_id
+	 * @param array $pa_options Supported options are:
+	 *      noCache = Don't use cache. [Default is false]
+	 * @return bool
+	 * @throws MemoryCacheInvalidParameterException
+	 */
+	static public function elementExists($pm_element_code_or_id, $pa_options=null) {
+		if(!$pm_element_code_or_id) { return null; }
+		if(is_numeric($pm_element_code_or_id)) { $pm_element_code_or_id = (int) $pm_element_code_or_id; }
+
+		if(!caGetOption('noCache', $pa_options, false) && MemoryCache::contains($pm_element_code_or_id, 'ElementIDs')) {
+			return MemoryCache::fetch($pm_element_code_or_id, 'ElementIDs');
+		}
+
+		$db = new Db();
+		$q = $db->query("SELECT element_id, element_code, datatype FROM ca_metadata_elements WHERE ".(is_numeric($pm_element_code_or_id) ? "element_id = ?" : "element_code = ?"), [$pm_element_code_or_id]);
+		
+		if($q->nextRow()) {
+			$element_id = $q->get('element_id');
+			$element_code = $q->get('element_code');
+			$datatype = $q->get('datatype');
+			MemoryCache::save($element_id, $element_id, 'ElementIDs');
+			MemoryCache::save($element_code, $element_id, 'ElementIDs');
+			MemoryCache::save($element_id, $element_code, 'ElementCodes');
+			MemoryCache::save($element_code, $datatype, 'ElementDataTypes');
+			MemoryCache::save($element_id, $datatype, 'ElementDataTypes');
+			
+			return true;
+		}
+		
+		return false;
+	}
+	# ------------------------------------------------------
+	/**
 	 * Get element id for given element code (or id)
 	 * @param mixed $pm_element_code_or_id
 	 * @param array $pa_options Supported options are:
@@ -1311,9 +1353,10 @@ class ca_metadata_elements extends LabelableBaseModelWithAttributes implements I
 	 */
 	static public function getInstance($pm_element_code_or_id) {
 		if(!$pm_element_code_or_id) { return null; }
-		if(is_numeric($pm_element_code_or_id)) { $pm_element_code_or_id = (int) $pm_element_code_or_id; }
-
+		if(is_numeric($pm_element_code_or_id)) { $pm_element_code_or_id = (int)$pm_element_code_or_id; }
+//print "ELEMENT FOR $pm_element_code_or_id<Br>\n";
 		if(MemoryCache::contains($pm_element_code_or_id, 'ElementInstances')) {
+			//print "CACHE FOR $pm_element_code_or_id<br>\n";
 			return MemoryCache::fetch($pm_element_code_or_id, 'ElementInstances');
 		}
 
@@ -1321,12 +1364,13 @@ class ca_metadata_elements extends LabelableBaseModelWithAttributes implements I
 
 		if (!($vn_element_id = $t_element->getPrimaryKey())) {
 			if ($t_element->load(array('element_code' => $pm_element_code_or_id))) {
-				MemoryCache::save((int) $t_element->getPrimaryKey(), $t_element, 'ElementInstances');
-				MemoryCache::save($t_element->get('element_code'), $t_element, 'ElementInstances');
+				MemoryCache::save((int)$t_element->getPrimaryKey(), $t_element, 'ElementInstances');
+				MemoryCache::save($pm_element_code_or_id, $t_element, 'ElementInstances');
 				return $t_element;
 			}
+			MemoryCache::save($pm_element_code_or_id, null, 'ElementInstances');
 		} else {
-			MemoryCache::save((int) $t_element->getPrimaryKey(), $t_element, 'ElementInstances');
+			MemoryCache::save((int)$t_element->getPrimaryKey(), $t_element, 'ElementInstances');
 			MemoryCache::save($t_element->get('element_code'), $t_element, 'ElementInstances');
 			return $t_element;
 		}

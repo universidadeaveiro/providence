@@ -252,6 +252,11 @@ class ca_users extends BaseModel {
 		)
 	);
 	
+	# ------------------------------------------------------
+	# Instance caching
+	# ------------------------------------------------------
+	protected $CACHE_INSTANCES = true;
+	
 	/** 
 	 * Container for persistent user-specific variables
 	 */

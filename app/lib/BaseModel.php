@@ -7,7 +7,7 @@
  * ----------------------------------------------------------------------
  *
  * Software by Whirl-i-Gig (http://www.whirl-i-gig.com)
- * Copyright 2000-2018 Whirl-i-Gig
+ * Copyright 2000-2019 Whirl-i-Gig
  *
  * For more information visit http://www.CollectiveAccess.org
  *
@@ -353,11 +353,6 @@ class BaseModel extends BaseObject {
 	 * Array of cached relationship info arrays
 	 */
 	static $s_relationship_info_cache = array();
-	
-	/**
-	 * Cached field values for load()'ed rows
-	 */
-	static $s_instance_cache = array();
 	
 	/**
 	 * 
@@ -1868,8 +1863,8 @@ class BaseModel extends BaseObject {
 		
 		// first check cache
 		foreach($pa_ids as $vn_i => $vn_id) {
-			if (isset(BaseModel::$s_instance_cache[$vs_table_name][$vn_id])) {
-				$va_value_arrays[$vn_id] = BaseModel::$s_instance_cache[$vs_table_name][$vn_id];
+			if(CompositeCache::contains($vn_id, "InstanceCache_{$vs_table_name}")) {
+				$va_value_arrays[$vn_id] = CompositeCache::fetch($vn_id, "InstanceCache_{$vs_table_name}");
 				unset($pa_ids[$vn_i]);
 			}
 		}
@@ -1905,10 +1900,10 @@ class BaseModel extends BaseObject {
 	public function load($pm_id=null, $pb_use_cache=true) {
 		$this->clear();
 		$vs_table_name = $this->tableName();
-		if ($pb_use_cache && is_numeric($pm_id) && isset(BaseModel::$s_instance_cache[$vs_table_name][(int)$pm_id]) && is_array(BaseModel::$s_instance_cache[$vs_table_name][(int)$pm_id])) {
-			$this->_FIELD_VALUES = BaseModel::$s_instance_cache[$vs_table_name][(int)$pm_id];
+		if ($pb_use_cache && $this->getProperty('CACHE_INSTANCES') && ((is_numeric($cache_key = $pm_id) &&  CompositeCache::contains($pm_id, "InstanceCache_{$vs_table_name}")) || (($cache_key = caMakeCacheKeyFromOptions($pm_id)) && CompositeCache::contains($cache_key, "InstanceCache_{$vs_table_name}")))) {
+			$this->_FIELD_VALUES = CompositeCache::fetch($cache_key, "InstanceCache_{$vs_table_name}"); 
 			$this->_FIELD_VALUES_OLD = $this->_FIELD_VALUES;
-			$this->_FILES_CLEAR = array();
+			$this->_FILES_CLEAR = [];
 			$this->opn_instantiated_at = time();
 			return true;
 		}
@@ -2005,10 +2000,13 @@ class BaseModel extends BaseObject {
 			$this->_FILES_CLEAR = array();
 			
 			if ($vn_id = $this->_FIELD_VALUES[$this->primaryKey()]) {
-				if (is_array(BaseModel::$s_instance_cache[$vs_table_name]) && sizeof(BaseModel::$s_instance_cache[$vs_table_name]) > 100) { 
-					BaseModel::$s_instance_cache[$vs_table_name] = array_slice(BaseModel::$s_instance_cache[$vs_table_name], 0, 50, true);
+				if ($this->getProperty('CACHE_INSTANCES')) {
+					if (!$cache_key && !is_numeric($pm_id)) { $cache_key = caMakeCacheKeyFromOptions($pm_id); }
+					CompositeCache::save($vn_id, $this->_FIELD_VALUES, "InstanceCache_{$vs_table_name}");
+					if ($cache_key && ($cache_key != $vn_id)) {
+						CompositeCache::save($cache_key, $this->_FIELD_VALUES, "InstanceCache_{$vs_table_name}");
+					}
 				}
-				BaseModel::$s_instance_cache[$vs_table_name][(int)$vn_id] = $this->_FIELD_VALUES; 
 			}
 			$this->opn_instantiated_at = time();
 			return true;
@@ -2021,6 +2019,9 @@ class BaseModel extends BaseObject {
 					$va_field_list[] = "$vs_field => $vm_value";
 				}
 				//$this->postError(750,_t("No record with %1", join(", ", $va_field_list)), "BaseModel->load()");
+			}
+			if ($this->getProperty('CACHE_INSTANCES')) {
+				CompositeCache::save($cache_key, null, "InstanceCache_{$vs_table_name}");
 			}
 			return false;
 		}
@@ -2134,15 +2135,10 @@ class BaseModel extends BaseObject {
 	  * Clear cached instance values for this model/table. When optional $pb_all_tables parameter is set all cache entries
 	  * from all models are cleared.
 	  *
-	  * @param bool $pb_all_tables Clear cache entries for all models/tables. [Default=false]
 	  * @return bool True on success 
 	  */
-	 public function clearInstanceCache($pb_all_tables=false) {
-	 	if ($pb_all_tables) {
-	 		BaseModel::$s_instance_cache = array();
-	 	} else {
-	 		BaseModel::$s_instance_cache[$this->tableName()] = array();
-	 	}
+	 public function clearInstanceCache() {
+	 	CompositeCache::flush('InstanceCache_'.$this->tableName());
 	 	return true;
 	 }
 	 
@@ -2153,8 +2149,7 @@ class BaseModel extends BaseObject {
 	  * @return bool True on success, false if there was no cache for the specified id.
 	  */
 	 public function clearInstanceCacheForID($pn_id) {
-	 	if(!isset(BaseModel::$s_instance_cache[$this->tableName()][(int)$pn_id])) { return false; }
-	 	unset(BaseModel::$s_instance_cache[$this->tableName()][(int)$pn_id]);
+	 	CompositeCache::save($pn_id, null, 'InstanceCache_'.$this->tableName());
 	 	return true;
 	 }
 	 
@@ -2610,12 +2605,10 @@ class BaseModel extends BaseObject {
 					$this->_FIELD_VALUE_DID_CHANGE = $this->_FIELD_VALUE_CHANGED;
 					$this->_FIELD_VALUE_CHANGED = array();					
 						
-					if (is_array(BaseModel::$s_instance_cache[$vs_table_name = $this->tableName()]) && (sizeof(BaseModel::$s_instance_cache[$vs_table_name = $this->tableName()]) > 100)) { 	// Limit cache to 100 instances per table
-						BaseModel::$s_instance_cache[$vs_table_name] = array_slice(BaseModel::$s_instance_cache[$vs_table_name], 0, 50, true);
-					}
-						
 					// Update instance cache
-					BaseModel::$s_instance_cache[$vs_table_name][(int)$vn_id] = $this->_FIELD_VALUES;
+					if ($this->getProperty('CACHE_INSTANCES')) {
+						CompositeCache::save($vn_id, $this->_FIELD_VALUES, 'InstanceCache_'.$this->tableName());
+					}
 					return $vn_id;
 				} else {
 					foreach($o_db->errors() as $o_e) {
@@ -3165,10 +3158,9 @@ class BaseModel extends BaseObject {
 				$this->_FIELD_VALUE_CHANGED = array();
 				
 				// Update instance cache
-				if (sizeof(BaseModel::$s_instance_cache[$vs_table_name = $this->tableName()]) > 100) { 	// Limit cache to 100 instances per table
-					BaseModel::$s_instance_cache[$vs_table_name] = array_slice(BaseModel::$s_instance_cache[$vs_table_name], 0, 50, true);
+				if ($this->getProperty('CACHE_INSTANCES')) {
+					CompositeCache::save($this->getPrimaryKey(), $this->_FIELD_VALUES, 'InstanceCache_'.$this->tableName());
 				}
-				BaseModel::$s_instance_cache[$vs_table_name][(int)$this->getPrimaryKey()] = $this->_FIELD_VALUES;
 				return true;
 			} else {
 				if ($vb_we_set_transaction) { $this->removeTransaction(false); }
